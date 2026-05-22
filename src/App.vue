@@ -4,11 +4,11 @@
     <!-- ══ 頂部標題列 ══ -->
     <header class="header">
       <div class="header-left">
-        <span class="header-icon">🌊</span>
+        <div class="logo-wrapper">🌊</div>
         <div>
           <div class="header-title">台灣地震速報</div>
           <div class="header-sub">
-            資料來源：
+            <span class="source-label">資料來源：</span>
             <a href="https://opendata.cwa.gov.tw" target="_blank">中央氣象署開放資料</a>
             ・顯著有感 + 小區域有感地震
           </div>
@@ -125,7 +125,7 @@
               <Transition name="expand">
                 <div v-if="selectedNo === q.no" class="quake-detail">
                   <!-- 各縣市震度 -->
-                  <div class="detail-title">各縣市最大震度</div>
+                  <div class="detail-title">📍 各縣市最大震度</div>
                   <div class="intensity-grid">
                     <div
                       v-for="area in q.areaIntensities"
@@ -134,12 +134,12 @@
                       :style="{
                         background: area.level.bg,
                         borderColor: area.level.color,
-                color: '#ffffff',
-                textShadow: '0 1px 2px rgba(0,0,0,0.4)'
+                        color: '#ffffff',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.4)'
                       }"
                     >
                       <span class="area-county">{{ area.county }}</span>
-                      <span class="area-intensity">{{ area.intensity }} 級</span>
+                      <span class="area-intensity">{{ area.intensity }}</span>
                     </div>
                   </div>
 
@@ -249,6 +249,7 @@ function initMap() {
 
 // ── 渲染地震標記 ──
 function renderMarkers() {
+  // 清除舊有的所有標記 (包含文字與動畫層)
   Object.values(markers).forEach(m => map.removeLayer(m))
   markers = {}
   if (circle) { map.removeLayer(circle); circle = null }
@@ -258,6 +259,9 @@ function renderMarkers() {
 
     const color  = q.magColor
     const radius = q.radius
+
+    // 判斷是否為 10 分鐘內發生的地震
+    const isRecent = (Date.now() - new Date(q.time).getTime()) < 600000
 
     // 圓形標記（大小代表規模）
     const marker = L.circleMarker([q.lat, q.lng], {
@@ -269,35 +273,40 @@ function renderMarkers() {
       opacity:     0.9
     }).addTo(map)
 
-    // 規模文字標記（疊在圓圈上）
+    // 規模文字標記 + 雷達擴散動畫
     const label = L.divIcon({
-      className: '',
-      html: `<div style="
-        color: white; font-size: 11px; font-weight: 700;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-        pointer-events: none; white-space: nowrap;
-        font-family: sans-serif;
-      ">M${q.magnitude.toFixed(1)}</div>`,
-      iconSize: [40, 14],
-      iconAnchor: [20, 7]
+      className: 'radar-container',
+      html: `
+        <div class="${isRecent ? 'radar-ring recent' : 'radar-ring'}" style="width:${radius * 1.6}px; height:${radius * 1.6}px; border:1px solid ${color}; background:${color}08;"></div>
+        <div class="${isRecent ? 'radar-ring recent' : 'radar-ring'}" style="width:${radius * 1.6}px; height:${radius * 1.6}px; border:1px solid ${color}; animation-delay:${isRecent ? '0.8s' : '1.5s'};"></div>
+        <div style="
+          position: relative;
+          color: white; font-size: 11px; font-weight: 700;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+          pointer-events: none; white-space: nowrap;
+          font-family: sans-serif;
+          transform: translate(-50%, -50%);
+        ">M${q.magnitude.toFixed(1)}</div>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
     })
-    L.marker([q.lat, q.lng], { icon: label, interactive: false }).addTo(map)
+    const labelMarker = L.marker([q.lat, q.lng], { icon: label, interactive: false }).addTo(map)
 
     marker.bindPopup(`
-      <div style="min-width:220px;line-height:1.8">
-        <div style="font-size:0.95rem;font-weight:700;margin-bottom:4px">
+      <div style="min-width:220px;line-height:1.8;color:#f8fafc">
+        <div style="font-size:0.95rem;font-weight:700;margin-bottom:4px;color:#94a3b8">
           🌊 地震 No.${q.no}
         </div>
         <div style="font-size:1.6rem;font-weight:700;color:${color}">
           M ${q.magnitude.toFixed(1)}
         </div>
-        <div style="font-size:0.8rem;color:#475569;margin-bottom:8px">
+        <div style="font-size:0.8rem;color:#cbd5e1;margin-bottom:8px">
           ${formatDateTime(q.time)} ・ ${timeAgo(q.time)}
         </div>
-        <div style="font-size:0.85rem;color:#0f172a;font-weight:600;margin-bottom:4px">
+        <div style="font-size:0.85rem;color:#ffffff;font-weight:600;margin-bottom:4px">
           📍 ${q.location}
         </div>
-        <div style="display:flex;gap:16px;font-size:0.8rem;color:#1e293b;font-weight:600;align-items:center">
+        <div style="display:flex;gap:16px;font-size:0.8rem;color:#e2e8f0;font-weight:600;align-items:center">
           <span>🔽 深度 ${q.depth} 公里</span>
           ${q.maxIntensity ? `<span>震度 <strong style="background:${getIntensityLevel(q.maxIntensity).color}; color:#ffffff; padding:2px 6px; border-radius:4px; text-shadow:0 1px 2px rgba(0,0,0,0.4)">${q.maxIntensity} 級</strong></span>` : ''}
         </div>
@@ -306,6 +315,7 @@ function renderMarkers() {
 
     marker.on('click', () => selectQuake(q))
     markers[q.no] = marker
+    markers[q.no + '_label'] = labelMarker
   })
 }
 
@@ -351,130 +361,131 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-#app-root { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+#app-root { 
+  display: flex; 
+  flex-direction: column; 
+  height: 100vh; 
+  overflow: hidden; 
+  background: #0f172a;
+  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+}
 
 /* ══ 頂部 ══ */
 .header {
-  background: #1e293b; border-bottom: 1px solid #334155;
-  padding: 12px 20px; display: flex; justify-content: space-between;
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px 24px; display: flex; justify-content: space-between;
   align-items: center; flex-shrink: 0; gap: 12px; flex-wrap: wrap;
+  z-index: 100;
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
-.header-icon { font-size: 1.8rem; }
-.header-title { font-size: 1.05rem; font-weight: 700; color: #f1f5f9; }
-.header-sub { font-size: 0.7rem; color: #64748b; margin-top: 2px; }
-.header-sub a { color: #3b82f6; text-decoration: none; }
-.header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
-.update-time { font-size: 0.72rem; color: #475569; }
-
-.key-btn {
-  background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3);
-  border-radius: 8px; padding: 7px 12px; color: #fca5a5; font-size: 0.78rem;
-  font-family: 'Noto Sans TC', sans-serif; transition: all 0.2s;
+.logo-wrapper { 
+  font-size: 2rem; 
+  background: rgba(255,255,255,0.05); 
+  padding: 8px; border-radius: 12px;
 }
-.key-btn.has-key { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); color: #86efac; }
-.key-btn:hover { opacity: 0.8; }
+.header-title { font-size: 1.25rem; font-weight: 800; color: #f8fafc; letter-spacing: 0.5px; }
+.header-sub { font-size: 0.75rem; color: #cbd5e1; margin-top: 2px; }
+.header-sub a { color: #3b82f6; text-decoration: none; }
+.header-sub a:hover { text-decoration: underline; }
+.header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.update-time { font-size: 0.75rem; color: #94a3b8; background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 6px; }
 
 .refresh-btn {
-  background: rgba(59,130,246,.12); border: 1px solid rgba(59,130,246,.3);
-  border-radius: 8px; padding: 7px 12px; color: #93c5fd; font-size: 0.78rem;
-  font-family: 'Noto Sans TC', sans-serif; display: flex; align-items: center;
-  gap: 5px; transition: all 0.2s;
+  background: #3b82f6; border: none;
+  border-radius: 10px; padding: 8px 16px; color: #ffffff; font-size: 0.85rem;
+  font-weight: 600; display: flex; align-items: center;
+  gap: 6px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
-.refresh-btn:hover:not(:disabled) { background: rgba(59,130,246,.22); }
+.refresh-btn:hover:not(:disabled) { background: #2563eb; transform: translateY(-1px); }
 .refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* ══ API Key 設定面板 ══ */
-.settings-panel {
-  background: #1e293b; border-bottom: 1px solid #334155;
-  padding: 14px 20px; flex-shrink: 0;
-}
-.settings-inner { max-width: 800px; }
-.settings-title { font-size: 0.88rem; font-weight: 700; color: #f1f5f9; margin-bottom: 6px; }
-.settings-hint { font-size: 0.75rem; color: #64748b; margin-bottom: 10px; }
-.settings-hint a { color: #3b82f6; text-decoration: none; }
-.settings-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.key-input {
-  flex: 1; min-width: 260px; background: #0f172a; border: 1px solid #334155;
-  border-radius: 8px; padding: 9px 12px; color: #e2e8f0; font-size: 0.85rem;
-  font-family: 'Noto Sans TC', sans-serif;
-}
-.key-input:focus { outline: none; border-color: #3b82f6; }
-.key-input::placeholder { color: #475569; }
-.save-btn {
-  background: #3b82f6; border: none; border-radius: 8px; padding: 9px 16px;
-  color: white; font-size: 0.85rem; font-family: 'Noto Sans TC', sans-serif;
-  transition: background 0.2s;
-}
-.save-btn:hover { background: #2563eb; }
-.clear-btn {
-  background: transparent; border: 1px solid #334155; border-radius: 8px;
-  padding: 9px 12px; color: #64748b; font-size: 0.85rem; font-family: 'Noto Sans TC', sans-serif;
-}
-.clear-btn:hover { border-color: #ef4444; color: #f87171; }
 
 /* ══ 主版面 ══ */
 .main-layout { display: flex; flex: 1; overflow: hidden; }
 
 /* ══ 左側面板 ══ */
 .sidebar {
-  width: 360px; flex-shrink: 0; background: #1e293b;
-  border-right: 1px solid #334155; display: flex; flex-direction: column; overflow: hidden;
+  width: 380px; flex-shrink: 0; background: #1e293b;
+  border-right: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; overflow: hidden;
 }
 
 /* 統計卡片 */
-.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; padding: 10px 14px; flex-shrink: 0; }
-.stat-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 4px; text-align: center; }
-.stat-num { font-size: 1.2rem; font-weight: 700; line-height: 1; }
+.stats-row { 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); 
+  gap: 10px; 
+  padding: 20px 16px; 
+  flex-shrink: 0; 
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.5), transparent);
+}
+.stat-card { 
+  background: #0f172a; 
+  border: 1px solid rgba(255,255,255,0.05); 
+  border-radius: 12px; 
+  padding: 12px; 
+  text-align: left;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.stat-num { font-size: 1.4rem; font-weight: 800; line-height: 1.2; }
 .stat-num.red    { color: #ef4444; }
 .stat-num.orange { color: #f97316; }
 .stat-num.yellow { color: #eab308; }
 .stat-num.blue   { color: #3b82f6; }
-.stat-label { font-size: 0.62rem; color: #64748b; margin-top: 3px; }
+.stat-label { font-size: 0.7rem; color: #cbd5e1; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
 /* 篩選標籤 */
-.filter-tabs { display: flex; gap: 5px; padding: 0 14px 8px; flex-shrink: 0; flex-wrap: wrap; }
+.filter-tabs { display: flex; gap: 6px; padding: 0 16px 16px; flex-shrink: 0; flex-wrap: wrap; }
 .filter-btn {
-  padding: 5px 12px; border: 1px solid #334155; border-radius: 20px;
-  background: transparent; color: #64748b; font-size: 0.75rem;
-  font-family: 'Noto Sans TC', sans-serif; transition: all 0.2s;
+  padding: 6px 14px; border: 1px solid #334155; border-radius: 20px;
+  background: rgba(15, 23, 42, 0.5); color: #cbd5e1; font-size: 0.75rem;
+  font-weight: 600; cursor: pointer; transition: all 0.2s ease;
 }
-.filter-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+.filter-btn:hover { border-color: #475569; color: #f1f5f9; }
+.filter-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4); }
 
 /* 狀態訊息 */
 .status-msg {
-  margin: 0 14px 8px; border-radius: 8px; padding: 8px 12px; font-size: 0.78rem; flex-shrink: 0;
+  margin: 0 16px 12px; border-radius: 10px; padding: 10px 14px; font-size: 0.8rem; flex-shrink: 0;
+  font-weight: 500;
 }
-.status-msg.default { background: #0f172a; border: 1px solid #334155; color: #64748b; }
+.status-msg.default { background: #0f172a; border: 1px solid #334155; color: #94a3b8; }
 .status-msg.loading { background: rgba(59,130,246,.08); border: 1px solid #3b82f6; color: #93c5fd; }
 .status-msg.success { background: rgba(34,197,94,.08);  border: 1px solid #22c55e; color: #86efac; }
 .status-msg.error   { background: rgba(239,68,68,.08);  border: 1px solid #ef4444; color: #f87171; }
 
 /* 地震列表 */
-.quake-list { flex: 1; overflow-y: auto; padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.quake-list { 
+  flex: 1; overflow-y: auto; padding: 0 16px 20px; display: flex; flex-direction: column; gap: 10px; 
+  scrollbar-width: thin; scrollbar-color: #334155 transparent;
+}
+.quake-list::-webkit-scrollbar { width: 4px; }
+.quake-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 
 .quake-card {
   background: #0f172a; border: 1px solid #334155; border-radius: 10px;
-  padding: 12px 12px 10px; cursor: pointer; transition: all 0.2s;
+  padding: 16px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.quake-card:hover { border-color: #475569; transform: translateX(2px); }
-.quake-card.selected { border-color: #3b82f6 !important; }
+.quake-card:hover { border-color: #64748b; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.2); }
+.quake-card.selected { border-color: #3b82f6 !important; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
 
 .quake-top {
   display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;
 }
 
 .mag-circle {
-  width: 48px; height: 48px; border-radius: 50%;
+  width: 52px; height: 52px; border-radius: 14px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   flex-shrink: 0;
+  backdrop-filter: blur(4px);
 }
 .mag-label { font-size: 0.6rem; line-height: 1; }
 .mag-val   { font-size: 1rem; font-weight: 700; line-height: 1; }
 
 .quake-time-info { flex: 1; }
 .quake-time { font-size: 0.78rem; color: #f1f5f9; font-weight: 500; }
-.quake-ago  { font-size: 0.7rem; color: #cbd5e1; }
+.quake-ago  { font-size: 0.7rem; color: #e2e8f0; }
 
 .quake-type-badge {
   font-size: 0.65rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; flex-shrink: 0;
@@ -487,27 +498,31 @@ onUnmounted(() => {
 
 /* 詳細資訊展開 */
 .quake-detail {
-  margin-top: 10px; padding-top: 10px; border-top: 1px solid #1e293b;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.05);
 }
 .detail-title {
-  font-size: 0.8rem; font-weight: 700; color: #ffffff; margin-bottom: 6px; margin-top: 4px;
+  font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 8px; margin-top: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
 }
 .intensity-grid { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .intensity-item {
-  padding: 3px 8px; border-radius: 6px; border: 1px solid;
+  padding: 4px 10px; border-radius: 8px; border: 1px solid;
   font-size: 0.72rem; display: flex; gap: 6px; align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-.area-county   { color: inherit; }
+.area-county   { color: inherit; opacity: 0.95; }
 .area-intensity { font-weight: 700; }
 
 .report-image-wrap { margin-bottom: 10px; }
-.report-image { width: 100%; border-radius: 8px; border: 1px solid #334155; }
+.report-image { width: 100%; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 
 .report-link {
-  display: block; font-size: 0.78rem; color: #3b82f6; text-decoration: none;
-  padding: 6px 0; border-top: 1px solid #1e293b; margin-top: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; color: #ffffff; text-decoration: none;
+  padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05);
+  margin-top: 8px; transition: all 0.2s;
 }
-.report-link:hover { color: #60a5fa; }
+.report-link:hover { background: rgba(255,255,255,0.1); color: #3b82f6; }
 
 /* 空狀態 */
 .empty { text-align: center; color: #cbd5e1; padding: 40px 0; font-size: 0.9rem; }
@@ -523,6 +538,42 @@ onUnmounted(() => {
 
 /* ══ 地圖 ══ */
 .map-area { flex: 1; }
+
+/* ══ 地圖彈窗樣式優化 ══ */
+:deep(.leaflet-popup-content-wrapper) {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+:deep(.leaflet-popup-tip) {
+  background: #1e293b !important;
+}
+
+/* ══ 雷達擴散動畫 ══ */
+@keyframes radar-pulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
+  100% { transform: translate(-50%, -50%) scale(1.15); opacity: 0; }
+}
+:deep(.radar-container) {
+  position: relative;
+  width: 0; height: 0;
+  pointer-events: none;
+}
+:deep(.radar-ring) {
+  position: absolute;
+  top: 50%; left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: radar-pulse 3s ease-out infinite;
+  box-sizing: border-box;
+}
+
+:deep(.radar-ring.recent) {
+  animation: radar-pulse-recent 1.6s ease-out infinite;
+  border-width: 1.5px !important;
+}
 
 /* ══ 動畫 ══ */
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -543,8 +594,8 @@ onUnmounted(() => {
 /* ══ 響應式 ══ */
 @media (max-width: 768px) {
   .main-layout { flex-direction: column; }
-  .sidebar { width: 100%; max-height: 55vh; border-right: none; border-bottom: 1px solid #334155; }
-  .stats-row { grid-template-columns: repeat(2,1fr); }
+  .sidebar { width: 100%; max-height: 50vh; border-right: none; border-bottom: 1px solid #334155; }
   .header-right .update-time { display: none; }
+  .logo-wrapper { font-size: 1.5rem; }
 }
 </style>
